@@ -1,0 +1,90 @@
+// File: ${semaphores}
+// Author: ${Bradley Kovacs}
+// Date: ${6/6/16}
+
+const int VALUE_RANGE = 20;     // integers in 0..19 will be produced
+const int BUFFER_SIZE = 5;
+
+binarysem to;                   // for exclusive access to terminal output
+binarysem mutex;                // mutual exclusion for the buffer
+binarysem outputCorrectIndex;   // used to ouput the correct index being produced / consumed
+semaphore numItemsInBuffer;     // # consumable items in the buffer
+semaphore numSpacesInBuffer;    // # empty spaces in the buffer
+
+int buffer[BUFFER_SIZE];
+int in = 0;                     // index of buffer to use for next append
+int out = 0;                    // index of buffer to use for next take 
+int totalItemsProduced = 0;
+int totalItemsConsumed = 0;
+
+void producer(char id)
+{
+    int i;
+    while (totalItemsProduced < 100) {
+
+        i = random(VALUE_RANGE);
+        wait(outputCorrectIndex);
+        wait(to);
+        cout << "Producer " << id << " produces " << i << " at index " << in << endl;
+        signal(to);
+
+        // Decrement the number of empty spaces in buffer OR sleep until there is a free space
+        wait(numSpacesInBuffer);
+
+        // Set mutex = 0 and continue this process OR sleep until it equals 1 again
+        wait(mutex);
+        
+        buffer[in] = i;
+        totalItemsProduced++;
+        in = (in + 1) % BUFFER_SIZE;
+        signal(outputCorrectIndex);
+
+        // Set mutex = 1 and continue, also wake up any processes that are waiting for mutex == 1
+        signal(mutex);
+
+        // Increment numItemsInBuffer by 1
+        signal(numItemsInBuffer);
+    }
+}
+
+void consumer(char id)
+{
+    int i;
+    while (totalItemsConsumed < 99) {
+
+        // Wait until numItemsInBuffer > 0, then decrement numItemsInBuffer by 1 and continue
+        wait(numItemsInBuffer);
+
+        // Set mutex = 0 and continue this process OR sleep until it equals 1 again
+        wait(mutex);
+
+        i = buffer[out];
+        totalItemsConsumed++;
+        wait(to);
+        cout << "Consumer " << id << " consumes " << i << " at index " << out << endl;
+        signal(to);
+
+        out = (out + 1) % BUFFER_SIZE;
+        
+        // Set mutex = 1 and continue, also wake up any processes that are waiting for mutex == 1
+        signal(mutex);
+
+        // Increment numSpacesInBuffer by 1
+        signal(numSpacesInBuffer);
+    }
+    signal(numItemsInBuffer);
+}
+
+void main() {
+    
+    initialsem(mutex, 1);
+    initialsem(numItemsInBuffer, 0);
+    initialsem(numSpacesInBuffer, BUFFER_SIZE);
+    initialsem(to, 1);
+    initialsem(outputCorrectIndex, 1);
+
+    cobegin {
+        producer('A');
+        consumer('x'); consumer('y');
+    }
+}

@@ -1,0 +1,93 @@
+BACI System: C-- to PCODE Compiler in Java, 09:45  05 Nov 2007
+Source File:  /Users/bradleykovacs/Desktop/semaphores/semaphores.cm  Sun Jun 12 21:36:52 2016
+ line  pc
+   1   0  // File: ${semaphores}
+   2   0  // Author: ${Bradley Kovacs}
+   3   0  // Date: ${6/6/16}
+   4   0  
+   5   0  const int VALUE_RANGE = 20;     // integers in 0..19 will be produced
+   6   0  const int BUFFER_SIZE = 5;
+   7   0  
+   8   0  binarysem to;                   // for exclusive access to terminal output
+   9   0  binarysem mutex;                // mutual exclusion for the buffer
+  10   0  binarysem outputCorrectIndex;   // used to ouput the correct index being produced / consumed
+  11   0  semaphore numItemsInBuffer;     // # consumable items in the buffer
+  12   0  semaphore numSpacesInBuffer;    // # empty spaces in the buffer
+  13   0  
+  14   0  int buffer[BUFFER_SIZE];
+  15   0  int in = 0;                     // index of buffer to use for next append
+  16   0  int out = 0;                    // index of buffer to use for next take 
+  17   0  int totalItemsProduced = 0;
+  18   0  int totalItemsConsumed = 0;
+  19   0  
+  20   0  void producer(char id)
+  21   0  {
+  22   0      int i;
+  23   0      while (totalItemsProduced < 100) {
+  24   4  
+  25   4          i = random(VALUE_RANGE);
+  26   8          wait(outputCorrectIndex);
+  27  10          wait(to);
+  28  12          cout << "Producer " << id << " produces " << i << " at index " << in << endl;
+  29  22          signal(to);
+  30  24  
+  31  24          // Decrement the number of empty spaces in buffer OR sleep until there is a free space
+  32  24          wait(numSpacesInBuffer);
+  33  26  
+  34  26          // Set mutex = 0 and continue this process OR sleep until it equals 1 again
+  35  26          wait(mutex);
+  36  28          
+  37  28          buffer[in] = i;
+  38  33          totalItemsProduced++;
+  39  38          in = (in + 1) % BUFFER_SIZE;
+  40  45          signal(outputCorrectIndex);
+  41  47  
+  42  47          // Set mutex = 1 and continue, also wake up any processes that are waiting for mutex == 1
+  43  47          signal(mutex);
+  44  49  
+  45  49          // Increment numItemsInBuffer by 1
+  46  49          signal(numItemsInBuffer);
+  47  51      }
+  48  51  }
+  49  52  
+  50  52  void consumer(char id)
+  51  53  {
+  52  53      int i;
+  53  53      while (totalItemsConsumed < 99) {
+  54  57  
+  55  57          // Wait until numItemsInBuffer > 0, then decrement numItemsInBuffer by 1 and continue
+  56  57          wait(numItemsInBuffer);
+  57  59  
+  58  59          // Set mutex = 0 and continue this process OR sleep until it equals 1 again
+  59  59          wait(mutex);
+  60  61  
+  61  61          i = buffer[out];
+  62  67          totalItemsConsumed++;
+  63  72          wait(to);
+  64  74          cout << "Consumer " << id << " consumes " << i << " at index " << out << endl;
+  65  84          signal(to);
+  66  86  
+  67  86          out = (out + 1) % BUFFER_SIZE;
+  68  93          
+  69  93          // Set mutex = 1 and continue, also wake up any processes that are waiting for mutex == 1
+  70  93          signal(mutex);
+  71  95  
+  72  95          // Increment numSpacesInBuffer by 1
+  73  95          signal(numSpacesInBuffer);
+  74  97      }
+  75  97      signal(numItemsInBuffer);
+  76 100  }
+  77 100  
+  78 100  void main() {
+  79 102      
+  80 102      initialsem(mutex, 1);
+  81 105      initialsem(numItemsInBuffer, 0);
+  82 108      initialsem(numSpacesInBuffer, BUFFER_SIZE);
+  83 111      initialsem(to, 1);
+  84 114      initialsem(outputCorrectIndex, 1);
+  85 117  
+  86 117      cobegin {
+  87 118          producer('A');
+  88 122          consumer('x'); consumer('y');
+  89 130      }
+  90 130  }
